@@ -20,6 +20,8 @@
 #ifndef _FASTDDS_RTPS_DISCOVERY_SHARED_INFO_H_
 #define _FASTDDS_RTPS_DISCOVERY_SHARED_INFO_H_
 
+#include <mutex>
+
 #include <fastdds/rtps/common/CacheChange.h>
 #include <fastdds/rtps/common/GuidPrefix_t.hpp>
 #include <fastdds/dds/log/Log.hpp>
@@ -50,6 +52,12 @@ public:
     {
     }
 
+    /**
+     * @brief Copy constructors required as mutex make this class not copyable by default.
+     */
+    DiscoverySharedInfo(const DiscoverySharedInfo& other) noexcept;
+    DiscoverySharedInfo(DiscoverySharedInfo&& other) noexcept;
+
     virtual eprosima::fastrtps::rtps::CacheChange_t* update_and_unmatch(
             eprosima::fastrtps::rtps::CacheChange_t* change);
 
@@ -62,24 +70,28 @@ public:
     {
         logInfo(DISCOVERY_DATABASE, "Adding relevant participant " << guid_p << " with status " << status << " to " <<
                 fastrtps::rtps::iHandle2GUID(change_->instanceHandle));
+        std::lock_guard<std::mutex> _(mutex_);
         relevant_participants_builtin_ack_status_.add_or_update_participant(guid_p, status);
     }
 
     void remove_participant(
             const eprosima::fastrtps::rtps::GuidPrefix_t& guid_p)
     {
+        std::lock_guard<std::mutex> _(mutex_);
         relevant_participants_builtin_ack_status_.remove_participant(guid_p);
     }
 
     bool is_matched(
             const eprosima::fastrtps::rtps::GuidPrefix_t& guid_p) const
     {
+        std::lock_guard<std::mutex> _(mutex_);
         return relevant_participants_builtin_ack_status_.is_matched(guid_p);
     }
 
     bool is_relevant_participant(
             const eprosima::fastrtps::rtps::GuidPrefix_t& guid_p) const
     {
+        std::lock_guard<std::mutex> _(mutex_);
         return relevant_participants_builtin_ack_status_.is_relevant_participant(guid_p);
     }
 
@@ -90,11 +102,13 @@ public:
 
     std::vector<eprosima::fastrtps::rtps::GuidPrefix_t> relevant_participants() const
     {
+        std::lock_guard<std::mutex> _(mutex_);
         return relevant_participants_builtin_ack_status_.relevant_participants();
     }
 
     bool is_acked_by_all() const
     {
+        std::lock_guard<std::mutex> _(mutex_);
         return relevant_participants_builtin_ack_status_.is_acked_by_all();
     }
 
@@ -104,6 +118,8 @@ public:
 private:
 
     eprosima::fastrtps::rtps::CacheChange_t* change_;
+
+    mutable std::mutex mutex_;
 
     // new class is used in order to could change it in the future for a more efficient implementation
     eprosima::fastdds::rtps::ddb::DiscoveryParticipantsAckStatus
